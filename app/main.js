@@ -9,7 +9,7 @@ const server = net.createServer((socket) => {
     if (request.startsWith("GET / ")) {
       socket.write("HTTP/1.1 200 OK\r\n\r\n");
     } else if (request.startsWith("GET /echo/")) {
-      const content = request.split("GET /echo/")[1].trim();
+      const content = request.split("GET /echo/")[1];
       const contentLength = Buffer.byteLength(content, "utf8"); // Accurate byte length of content
       socket.write(
         `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${contentLength}\r\n\r\n${content}`
@@ -29,7 +29,7 @@ const server = net.createServer((socket) => {
   });
 });
 
-// Handle server close event
+
 server.on("close", () => {
   console.log("Server closed");
 });
