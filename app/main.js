@@ -51,7 +51,34 @@ const handleConnection = (socket) => {
 
       socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
       socket.end();
+    } else if (method === "POST") {
+      if (path.startsWith("/files/")) {
+        const filePath = path.slice(7);
+        const contentLengthHeader = headers.find((h) =>
+          h.startsWith("Content-Length:")
+        );
+        const contentLength = parseInt(
+          contentLengthHeader.split(":")[1].trim()
+        );
+
+        let body = "";
+        socket.on("data", (chunk) => {
+          body += chunk.toString();
+          if (body.length >= contentLength) {
+            fs.writeFileSync(
+              directory + "/" + filePath,
+              body.slice(0, contentLength)
+            );
+            socket.write("HTTP/1.1 201 Created\r\n\r\n");
+            socket.end();
+          }
+        });
+        return;
+      }
     }
+
+    socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+    socket.end();
   });
 
   socket.on("end", () => {
