@@ -1,33 +1,58 @@
 const net = require("net");
-const server = net.createServer((socket) => {
-    //Request
-    socket.on("data", (data) => {
-        const request = data.toString();
-        console.log("Request: \n" + request);
-        const url = request.split(' ')[1];
-        const headers = request.split('\r\n');
-        if(url == "/"){
-            socket.write("HTTP/1.1 200 OK\r\n\r\n");
-        }else if(url.includes("/echo/")){
-            const content = url.split('/echo/')[1];
-            socket.write(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${content.length}\r\n\r\n${content}`);
-        }else if(url == "/user-agent"){
-            const userAgent = headers[2].split('User-Agent: ')[1];
-            socket.write(`HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgent.length}\r\n\r\n${userAgent}`);
-        }else{
-            socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+const fs = require("fs");
+
+console.log("Logs from your program will appear here!");
+const flags = process.argv.slice(2);
+const directory = flags.find((_, index) => flags[index - 1] == "--directory");
+
+const handleConnection = (socket) => {
+  socket.on("data", (data) => {
+    const [request, host, agent] = data.toString().split("\r\n");
+    const [method, path, version] = request.split(" ");
+    if (method === "GET") {
+      if (path === "/") {
+        socket.write("HTTP/1.1 200 OK\r\n\r\n");
+        return;
+      } else if (path.startsWith("/echo/")) {
+        const pathParameter = path.replace("/echo/", "");
+        socket.write(
+          `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${pathParameter.length}\r\n\r\n${pathParameter}`
+        );
+      } else if (path.startsWith("/user-agent")) {
+        const userAgent = agent.replace("User-Agent: ", "");
+        socket.write(
+          `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgent.length}\r\n\r\n${userAgent}`
+        );
+      } else if (path.startsWith("/files/")) {
+        const filePath = path.slice(7);
+        if (!fs.existsSync(directory + filePath)) {
+          socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+          socket.end();
+          return;
         }
-    });
-    //Error Handling
-    socket.on("error", (e) => {
-        console.error("ERROR: " + e);
-        socket.end();
-        socket.close();
-    });
-    //Closing
-    socket.on("close", () => {
-        socket.end();
-        // server.close();
-    });
+        const file = fs.readFileSync(directory + filePath);
+        socket.write(
+          `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${file.length}\r\n\r\n${file}`
+        );
+      }
+      socket.write("HTTP/1.1 404 NOT FOUND\r\n\r\n");
+      socket.end();
+    }
+  });
+
+  socket.on("end", () => {
+    console.log("Client disconnected");
+  });
+};
+const server = net.createServer((socket) => {
+  handleConnection(socket);
 });
 server.listen(4221, "localhost");
+
+process.on("SIGINT", () => {
+  console.log("Server shutting down...");
+  server.close(() => {
+    console.log("Server closed.");
+    process.exit(0);
+  });
+});
