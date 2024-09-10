@@ -2,24 +2,58 @@ const net = require("net");
 
 console.log("Logs from your program will appear here!");
 
-// Uncomment this to pass the first stage
 const server = net.createServer((socket) => {
-  //   socket.write("HTTP/1.1 200 OK\r\n\r\n");
   socket.on("data", (data) => {
     const request = data.toString();
+    const lines = request.split("\r\n");
+    const requestLine = lines[0]; // e.g., GET /echo/abc HTTP/1.1
 
-    if (request.startsWith("GET / ")) {
-      console.log(socket.write("HTTP/1.1 200 OK\r\n\r\n"));
-    } else if (request.startsWith("GET /echo /")) {
-      const content = request.split("GET /echo /")[1];
-      socket.write(
-        `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${content.length}\r\n\r\n${content}`
-      );
+    if (requestLine.startsWith("GET /echo/")) {
+      // Extract the string from the URL
+      const content = requestLine.split("GET /echo/")[1].split(" ")[0];
+      const contentLength = Buffer.byteLength(content, 'utf8');
+
+      // Construct the HTTP response
+      const response = 
+        `HTTP/1.1 200 OK\r\n` +
+        `Content-Type: text/plain\r\n` +
+        `Content-Length: ${contentLength}\r\n` +
+        `\r\n` +  // End of headers
+        `${content}`;  // Response body
+
+      socket.write(response);
+
+    } else if (requestLine === "GET / HTTP/1.1") {
+      // Handle root path
+      const content = "Welcome to the server!";
+      const contentLength = Buffer.byteLength(content, 'utf8');
+
+      // Construct the HTTP response
+      const response =
+        `HTTP/1.1 200 OK\r\n` +
+        `Content-Type: text/plain\r\n` +
+        `Content-Length: ${contentLength}\r\n` +
+        `\r\n` +  // End of headers
+        `${content}`;  // Response body
+
+      socket.write(response);
+
     } else {
-      console.log(socket.write("HTTP/1.1 404 Not Found\r\n\r\n"));
+      // Handle other paths
+      socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
     }
+  });
+
+  socket.on("error", (e) => {
+    console.error("ERROR: " + e);
     socket.end();
+  });
+
+  socket.on("close", () => {
+    console.log("Socket closed");
   });
 });
 
-server.listen(4221, "localhost");
+server.listen(4221, "localhost", () => {
+  console.log("Server listening on port 4221");
+});
