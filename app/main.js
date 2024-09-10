@@ -25,28 +25,23 @@ const handleConnection = (socket) => {
         socket.write(
           `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgentValue.length}\r\n\r\n${userAgentValue}`
         );
-      } else if (path.startsWith("/files/") && method === "POST") {
+      } else if (path.startsWith("/files/")) {
         const filePath = path.slice(7);
-        const contentLengthHeader = headers.find((h) =>
-          h.startsWith("Content-Length:")
-        );
-        const contentLength = parseInt(
-          contentLengthHeader.split(":")[1].trim()
-        );
-
-        let body = "";
-        socket.on("data", (chunk) => {
-          body += chunk.toString();
-          if (body.length >= contentLength) {
-            fs.writeFileSync(
-              directory + "/" + filePath,
-              body.slice(0, contentLength)
-            );
-            socket.write("HTTP/1.1 201 Created\r\n\r\n");
-            socket.end();
-          }
-        });
-        return;
+        const fullPath = `${directory}/${filePath}`;
+        
+        if (fs.existsSync(fullPath)) {
+          const content = fs.readFileSync(fullPath);
+          socket.write(
+            `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${content.length}\r\n\r\n`
+          );
+          socket.write(content);
+          socket.end();
+          return;
+        } else {
+          socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+          socket.end();
+          return;
+        }
       }
 
       socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
