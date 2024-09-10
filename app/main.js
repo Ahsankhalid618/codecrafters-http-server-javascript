@@ -7,8 +7,9 @@ const directory = flags.find((_, index) => flags[index - 1] == "--directory");
 
 const handleConnection = (socket) => {
   socket.on("data", (data) => {
-    const [request, host, agent] = data.toString().split("\r\n");
-    const [method, path, version] = request.split(" ");
+    const [requestLine, ...headers] = data.toString().split("\r\n");
+    const [method, path, version] = requestLine.split(" ");
+
     if (method === "GET") {
       if (path === "/") {
         socket.write("HTTP/1.1 200 OK\r\n\r\n");
@@ -19,21 +20,33 @@ const handleConnection = (socket) => {
           `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${pathParameter.length}\r\n\r\n${pathParameter}`
         );
       } else if (path.startsWith("/user-agent")) {
-        const userAgent = agent.replace("User-Agent: ", "");
+        const userAgent = headers.find((h) => h.startsWith("User-Agent: "));
+        const userAgentValue = userAgent.split(":")[1].trim();
         socket.write(
-          `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgent.length}\r\n\r\n${userAgent}`
+          `HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ${userAgentValue.length}\r\n\r\n${userAgentValue}`
         );
-      } else if (path.startsWith("/files/")) {
+      } else if (path.startsWith("/files/") && method === "POST") {
         const filePath = path.slice(7);
-        if (!fs.existsSync(directory + filePath)) {
-          socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
-          socket.end();
-          return;
-        }
-        const file = fs.readFileSync(directory + filePath);
-        socket.write(
-          `HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: ${file.length}\r\n\r\n${file}`
+        const contentLengthHeader = headers.find((h) =>
+          h.startsWith("Content-Length:")
         );
+        const contentLength = parseInt(
+          contentLengthHeader.split(":")[1].trim()
+        );
+
+        let body = "";
+        socket.on("data", (chunk) => {
+          body += chunk.toString();
+          if (body.length >= contentLength) {
+            fs.writeFileSync(
+              directory + "/" + filePath,
+              body.slice(0, contentLength)
+            );
+            socket.write("HTTP/1.1 201 Created\r\n\r\n");
+            socket.end();
+          }
+        });
+        return;
       }
 
       socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
