@@ -27,7 +27,7 @@ const server = net.createServer((socket) => {
     //Closing
     socket.on("close", () => {
         socket.end();
-        server.close();
+        // server.close();
     });
 });
 server.listen(4221, "localhost");
